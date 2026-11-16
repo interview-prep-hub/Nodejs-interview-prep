@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+#
+# SNIPPET, not executed. The same service with a "distroless" runtime stage.
+# Distroless images contain Node and the C libraries and almost nothing else: NO shell, NO npm, NO package manager,
+# NO curl. That is a smaller attack surface and a smaller image, and a harder life when you debug.
+#
+# Check the exact image name and tag in the distroless project before you use it; tags change over time.
+ARG NODE_VERSION=24
+
+FROM node:${NODE_VERSION}-slim AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+FROM node:${NODE_VERSION}-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# The ":nonroot" variants run as a non-root user by default.
+FROM gcr.io/distroless/nodejs24-debian12:nonroot AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=deps  /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY healthcheck.js ./
+EXPOSE 3000
+
+# No shell means no shell-form commands and no `sh -c`. The ENTRYPOINT of the image is already "node",
+# so CMD is just the script. PID 1 problem: use `docker run --init`, or a runtime that has an init (Kubernetes
+# does not add one by default, so make sure your app handles SIGTERM itself).
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+  CMD ["/nodejs/bin/node", "healthcheck.js"]
+CMD ["dist/server.js"]
+
+# healthcheck.js (a separate small file, because there is no shell to write `node -e "..."` for us):
+#
+#   fetch('http://127.0.0.1:3000/livez')
+#     .then((r) => process.exit(r.ok ? 0 : 1))
+#     .catch(() => process.exit(1));

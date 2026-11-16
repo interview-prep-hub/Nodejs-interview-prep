@@ -1,0 +1,17 @@
+{
+  "name": "nodejs-interview-prep",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-study Node.js interview prep: lessons from the basics to advanced, plus practice rounds with questions, answers and coding challenges.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "npm run check:text && npm run check:qa && npm run check:examples && npm run check:challenges",
+    "check:qa": "node scripts/check-qa.js",
+    "check:text": "node scripts/check-text.js",
+    "check:examples": "node scripts/check-examples.js",
+    "check:challenges": "node scripts/check-challenges.js",
+    "challenge": "node scripts/run-challenge.js"
+  }
+}

@@ -1,0 +1,15 @@
+// tsconfig.build.json: use this when you COMPILE to plain JavaScript and ship the dist folder.
+//   npx tsc -p tsconfig.build.json     then     node dist/index.js
+// It starts from the checking config and turns emitting on.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "rewriteRelativeImportExtensions": true,
+    "sourceMap": true,
+    "declaration": true
+  },
+  "exclude": ["**/*.test.ts"]
+}

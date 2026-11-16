@@ -1,0 +1,31 @@
+# SNIPPET, not executed. Everything listed here is NOT sent to the Docker build, which makes builds faster
+# and keeps secrets and junk out of the image. It works like .gitignore, but it is a separate file.
+
+# Dependencies are installed INSIDE the image. Your Windows or macOS node_modules would be the wrong binaries.
+node_modules
+npm-debug.log*
+
+# Build output is produced inside the image too.
+dist
+coverage
+
+# Secrets and local settings must never end up in an image layer (layers can be read by anyone with the image).
+.env
+.env.*
+!.env.example
+
+# Version control and editor files
+.git
+.gitignore
+.vscode
+.idea
+
+# Docker files themselves
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# Tests are not needed at runtime
+test
+tests
+**/*.test.js

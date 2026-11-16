@@ -1,0 +1,55 @@
+# SNIPPET, not executed. A systemd unit that runs a Node.js app on a Linux server.
+# Install:  sudo cp orders-api.service /etc/systemd/system/
+#           sudo systemctl daemon-reload && sudo systemctl enable --now orders-api
+# Logs:     journalctl -u orders-api -f          Status: systemctl status orders-api
+# Deploy:   sudo systemctl restart orders-api    (a restart stops the old process first: expect a short gap)
+#
+# IMPORTANT: in unit files a comment must be on its own line. A "#" after a value becomes part of the value.
+
+[Unit]
+Description=Orders API (Node.js)
+After=network-online.target
+Wants=network-online.target
+# Crash-loop protection: if the service is started more than 5 times in 60 seconds, systemd gives up and marks it failed.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=orders
+Group=orders
+WorkingDirectory=/opt/orders-api/current
+
+# One KEY=value per line. Keep this file readable only by root (chmod 600), it holds secrets.
+EnvironmentFile=/etc/orders-api/env
+Environment=NODE_ENV=production
+
+# Use the full path of node. systemd does not read your shell profile, so nvm and PATH tricks do not work here.
+ExecStart=/usr/bin/node dist/server.js
+
+# Restart after a crash or a non-zero exit, but NOT after a clean stop that you asked for.
+Restart=on-failure
+RestartSec=2
+
+# Stopping: systemd sends SIGTERM, waits up to TimeoutStopSec for your graceful shutdown, then sends SIGKILL.
+# Keep your own hard timeout (lesson example 05) shorter than this value.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Open files and sockets. The usual default of 1024 is low for a busy server.
+LimitNOFILE=65536
+# The kernel kills the process above this value. Set --max-old-space-size lower, at about 75 percent of it.
+MemoryMax=600M
+
+# Hardening: the app can do less if it is ever compromised.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/orders-api
+
+# stdout and stderr go to the journal. Write structured JSON logs to stdout; no log files are needed.
+SyslogIdentifier=orders-api
+
+[Install]
+WantedBy=multi-user.target

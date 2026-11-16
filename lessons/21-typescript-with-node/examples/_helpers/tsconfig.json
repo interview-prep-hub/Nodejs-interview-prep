@@ -1,0 +1,28 @@
+// tsconfig.json for a project where Node 24 runs the .ts files directly (type stripping).
+// IMPORTANT: Node does not read this file. Only tsc and your editor read it.
+// Use it to CHECK types:  npx tsc --noEmit
+// Needs: npm install --save-dev typescript @types/node
+{
+  "compilerOptions": {
+    // What the code will run on
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    // Be strict. This is the setting that gives TypeScript its value.
+    "strict": true,
+
+    // Make tsc agree with what Node will really do with the files
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+
+    // Quality of life
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}

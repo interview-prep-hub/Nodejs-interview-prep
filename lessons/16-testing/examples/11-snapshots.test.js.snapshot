@@ -1,0 +1,37 @@
+exports[`snapshots > API object (the default serializer writes JSON) 1`] = `
+{
+  "id": 7,
+  "itemCount": 2,
+  "totalCents": 1500,
+  "items": [
+    {
+      "name": "pen",
+      "qty": 2,
+      "lineCents": 300
+    },
+    {
+      "name": "book",
+      "qty": 1,
+      "lineCents": 1200
+    }
+  ]
+}
+`;
+
+exports[`snapshots > empty order 1`] = `
+{
+  "id": 8,
+  "itemCount": 0,
+  "totalCents": 0,
+  "items": []
+}
+`;
+
+exports[`snapshots > receipt text (a raw string serializer keeps the .snapshot file readable) 1`] = `
+Receipt #7
+------------------------
+pen x2             $3.00
+book x1           $12.00
+------------------------
+Total             $15.00
+`;

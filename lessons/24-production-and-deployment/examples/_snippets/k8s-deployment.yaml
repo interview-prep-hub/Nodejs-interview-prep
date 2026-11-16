@@ -1,0 +1,151 @@
+# SNIPPET, not executed. The Kubernetes objects a Node.js service usually needs, with comments in plain words.
+# Apply with: kubectl apply -f k8s-deployment.yaml
+---
+# A ConfigMap holds NON-secret settings. The pod reads them as environment variables (see envFrom below).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orders-api-config
+data:
+  NODE_ENV: production
+  DEPLOY_ENV: staging
+  LOG_LEVEL: info
+  SHUTDOWN_TIMEOUT_MS: "20000"
+---
+# A Secret holds sensitive values. Kubernetes only base64-encodes it (that is NOT encryption).
+# Never commit real values. Create it from a secret manager or with sealed/external secrets, or by hand:
+#   kubectl create secret generic orders-api-secrets --from-literal=DATABASE_URL='postgres://...'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orders-api-secrets
+type: Opaque
+stringData:
+  DATABASE_URL: CHANGE_ME
+  SESSION_SECRET: CHANGE_ME
+---
+# A Deployment keeps N identical pods running and replaces them when you change the template (a rolling update).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-api
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5            # old versions kept for `kubectl rollout undo`
+  selector:
+    matchLabels:
+      app: orders-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0              # never go below 3 ready pods during an update
+      maxSurge: 1                    # start at most 1 extra pod at a time
+  template:
+    metadata:
+      labels:
+        app: orders-api
+    spec:
+      # Time between SIGTERM and SIGKILL. Must be LONGER than your preStop sleep + your own graceful shutdown timeout.
+      terminationGracePeriodSeconds: 40
+      containers:
+        - name: api
+          image: ghcr.io/example/orders-api:1.4.2     # a fixed tag (or digest) per release, never :latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: orders-api-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orders-api-secrets
+                  key: DATABASE_URL
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: orders-api-secrets
+                  key: SESSION_SECRET
+            # Keep V8's heap below the container limit (limit 512Mi here, so about 75 percent).
+            - name: NODE_OPTIONS
+              value: --max-old-space-size=384
+
+          # REQUESTS = what the scheduler reserves for you (used to decide which machine the pod goes to).
+          # LIMITS   = a hard ceiling. Going over the memory limit means the container is killed (OOMKilled, exit 137).
+          # A CPU limit throttles the process instead of killing it, and throttling shows up as event loop lag.
+          # Many teams set a CPU request but no CPU limit for Node services. Measure before you decide.
+          resources:
+            requests:
+              cpu: 250m              # a quarter of one core
+              memory: 384Mi
+            limits:
+              memory: 512Mi
+
+          # STARTUP: "has the app finished starting?" The other probes wait until this passes once.
+          startupProbe:
+            httpGet: { path: /startupz, port: 3000 }
+            periodSeconds: 2
+            failureThreshold: 30     # up to 60 seconds to start
+          # READINESS: "send me traffic?" A failure removes the pod from the Service. The pod is NOT restarted.
+          readinessProbe:
+            httpGet: { path: /readyz, port: 3000 }
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+          # LIVENESS: "is the process stuck?" A failure RESTARTS the container. Keep it simple, never check the database.
+          livenessProbe:
+            httpGet: { path: /livez, port: 3000 }
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          # On shutdown Kubernetes removes the pod from the Service and sends SIGTERM at about the same time.
+          # Load balancers need a few seconds to notice, so wait a little before the app starts closing.
+          # (Needs a `sleep` command in the image. An app-level readiness delay, as in example 05, does the same job.)
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+---
+# A Service gives the pods one stable address and spreads traffic over the READY pods only.
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-api
+spec:
+  selector:
+    app: orders-api
+  ports:
+    - port: 80
+      targetPort: 3000
+---
+# The HorizontalPodAutoscaler changes the number of pods by itself, based on measured use.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: orders-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: orders-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70     # percent of the CPU REQUEST (250m), so it needs a request to work
+---
+# A PodDisruptionBudget limits how many pods a planned event (node upgrade, drain) may take away at once.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: orders-api
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: orders-api
